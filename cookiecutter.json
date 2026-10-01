@@ -1,0 +1,30 @@
+{
+  "project_name": "Minha Aplicacao",
+  "project_slug": "{{ cookiecutter.project_name | slugify }}",
+  "description": "API FastAPI publicada atras do Traefik com deploy pelo Jenkins",
+  "author_name": "Nathan Souza",
+  "author_email": "naathanmarinho11@gmail.com",
+  "github_org": "thentsation",
+  "domain": "example.com",
+  "subdomain": "{{ cookiecutter.project_slug }}",
+  "app_port": "8000",
+  "health_path": "/health",
+  "health_expects_version": ["yes", "no"],
+  "healthcheck_tool": ["python", "curl", "wget"],
+  "deploy_branch": "master",
+  "registry": "gru.ocir.io",
+  "registry_namespace": "grun5vjqis7z",
+  "proxy_network": "proxy",
+  "python_version": "3.14",
+  "__prompts__": {
+    "project_name": "Nome do projeto",
+    "project_slug": "Slug (container, router do Traefik e imagem)",
+    "domain": "Dominio base",
+    "subdomain": "Subdominio (host = subdominio.dominio)",
+    "app_port": "Porta interna da aplicacao",
+    "health_path": "Caminho do healthcheck",
+    "health_expects_version": "O healthcheck devolve a versao?",
+    "healthcheck_tool": "Ferramenta do healthcheck no compose",
+    "deploy_branch": "Branch que faz deploy"
+  }
+}

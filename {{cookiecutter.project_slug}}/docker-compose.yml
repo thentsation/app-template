@@ -1,0 +1,41 @@
+services:
+  app:
+    image: ${APP_IMAGE:-{{ cookiecutter.registry }}/{{ cookiecutter.registry_namespace }}/{{ cookiecutter.project_slug }}:latest}
+    pull_policy: missing
+    container_name: {{ cookiecutter.project_slug }}
+    restart: unless-stopped
+    expose:
+      - '{{ cookiecutter.app_port }}'
+    env_file:
+      - path: ${APP_ENV_FILE:-.env}
+        required: false
+    healthcheck:
+{%- if cookiecutter.healthcheck_tool == 'python' %}
+      test:
+        - CMD
+        - python
+        - -c
+        - "import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:{{ cookiecutter.app_port }}{{ cookiecutter.health_path }}', timeout=4).status == 200 else 1)"
+{%- elif cookiecutter.healthcheck_tool == 'curl' %}
+      test: ['CMD', 'curl', '-fsS', '-o', '/dev/null', 'http://127.0.0.1:{{ cookiecutter.app_port }}{{ cookiecutter.health_path }}']
+{%- else %}
+      test: ['CMD', 'wget', '-q', '-O', '/dev/null', 'http://127.0.0.1:{{ cookiecutter.app_port }}{{ cookiecutter.health_path }}']
+{%- endif %}
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks:
+      - proxy
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=${PROXY_NETWORK:-{{ cookiecutter.proxy_network }}}
+      - traefik.http.routers.{{ cookiecutter.project_slug }}.rule=Host(`{{ cookiecutter.subdomain }}.{{ cookiecutter.domain }}`)
+      - traefik.http.routers.{{ cookiecutter.project_slug }}.entrypoints=websecure
+      - traefik.http.routers.{{ cookiecutter.project_slug }}.tls.certresolver=letsencrypt
+      - traefik.http.services.{{ cookiecutter.project_slug }}.loadbalancer.server.port={{ cookiecutter.app_port }}
+
+networks:
+  proxy:
+    name: ${PROXY_NETWORK:-{{ cookiecutter.proxy_network }}}
+    external: true
