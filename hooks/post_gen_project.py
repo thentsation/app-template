@@ -14,6 +14,7 @@ EXPECTED_FILES = [
     '.gitignore',
     '.pre-commit-config.yaml',
     'CHANGELOG.md',
+    'Jenkinsfile',
     'Makefile',
     'README.md',
     'README.pt-br.md',

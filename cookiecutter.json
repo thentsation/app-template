@@ -5,7 +5,7 @@
   "author_name": "Nathan Souza",
   "author_email": "naathanmarinho11@gmail.com",
   "github_org": "thentsation",
-  "domain": "example.com",
+  "domain": "137-131-175-7.sslip.io",
   "subdomain": "{{ cookiecutter.project_slug }}",
   "app_port": "8000",
   "health_path": "/health",
