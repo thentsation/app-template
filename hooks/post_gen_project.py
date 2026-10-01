@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 EXPECTED_FILES = [
+    '.github/dependabot.yml',
     '.dockerignore',
     '.env.example',
     '.gitignore',

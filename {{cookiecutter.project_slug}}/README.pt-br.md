@@ -50,6 +50,8 @@ O stage `test` do `docker/Dockerfile` roda `ruff check`, `ruff format --check`, 
 | `APP_VERSION` | `0.0.0-dev` | Definida no build (`--build-arg APP_VERSION=<sha curto>`) |
 | `DOCS_ENABLED` | `true` | Habilita `/docs` e `/openapi.json` |
 
+- Não defina `APP_VERSION` no `.env` (nem em `/opt/apps/{{ cookiecutter.project_slug }}/.env`): ela sobrescreve a versão gravada na imagem e a validação do Jenkins falha e faz rollback.
+
 Variáveis só do compose (todas opcionais, `docker compose config -q` funciona sem elas):
 
 | Variável | Padrão | Descrição |
