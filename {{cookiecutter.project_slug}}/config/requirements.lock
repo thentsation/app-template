@@ -1,4 +1,4 @@
-# uv pip compile config/requirements.txt -o config/requirements.lock --universal
+# uv pip compile config/requirements.txt --output-file config/requirements.lock --universal
 # versoes alinhadas com o lockfile do sentiment-analysis-api
 annotated-doc==0.0.5
 annotated-types==0.8.0
