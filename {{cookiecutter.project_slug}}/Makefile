@@ -1,4 +1,7 @@
 .PHONY: install run dev test coverage lint format typecheck docker-build docker-test docker-run compose-config clean
+{%- if cookiecutter.platform_mode == 'tenant' %}
+.PHONY: compose-up compose-down jenkins-login jenkins-build jenkins-status deploy-request logs undeploy
+{%- endif %}
 
 VENV := .venv
 PYTHON := $(VENV)/bin/python
@@ -52,3 +55,31 @@ clean:
 	find . -type d -name .pytest_cache -not -path './$(VENV)/*' -exec rm -rf {} +
 	find . -type f -name '*.pyc' -not -path './$(VENV)/*' -delete
 	rm -f .coverage
+{%- if cookiecutter.platform_mode == 'tenant' %}
+
+# --- Rodar local com o compose de desenvolvimento ---------------------------------
+compose-up:
+	docker compose up -d --build
+
+compose-down:
+	docker compose down
+
+# --- Jenkins da plataforma (tenant {{ cookiecutter.tenant }}; ver scripts/platform.sh) -----------
+jenkins-login:
+	@scripts/platform.sh login
+
+jenkins-build:
+	@scripts/platform.sh build
+
+jenkins-status:
+	@scripts/platform.sh status
+
+deploy-request:
+	@TAG=$(TAG) scripts/platform.sh deploy-request
+
+logs:
+	@LINES=$(LINES) scripts/platform.sh logs
+
+undeploy:
+	@scripts/platform.sh undeploy
+{%- endif %}

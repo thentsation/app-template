@@ -7,8 +7,9 @@ YAML/TOML nao for parseavel.
 import sys
 from pathlib import Path
 
+MODE = '{{ cookiecutter.platform_mode }}'
+
 EXPECTED_FILES = [
-    '.github/dependabot.yml',
     '.dockerignore',
     '.env.example',
     '.gitignore',
@@ -25,6 +26,7 @@ EXPECTED_FILES = [
     'docker/Dockerfile',
     'pyproject.toml',
     'pytest.ini',
+    'renovate.json',
     'src/__init__.py',
     'src/config.py',
     'src/main.py',
@@ -36,18 +38,14 @@ EXPECTED_FILES = [
     'tests/test_main.py',
 ]
 
-# O Jenkinsfile e mantido a parte e pode conter sintaxe propria.
-SKIP_RENDER_CHECK = {'Jenkinsfile'}
+# Nenhum arquivo gerado pode ter marcacao do Jinja sobrando.
+SKIP_RENDER_CHECK: set[str] = set()
 # Montado por concatenacao para o proprio hook nao ser interpretado pelo Jinja.
 JINJA_MARKERS = tuple('{' + c for c in ('{', '%', '#'))
 
 
 def project_files(root: Path) -> list[Path]:
     return [p for p in root.rglob('*') if p.is_file() and '.git' not in p.parts]
-
-
-def check_expected(root: Path) -> list[str]:
-    return [f'arquivo esperado ausente: {name}' for name in EXPECTED_FILES if not (root / name).is_file()]
 
 
 def check_rendered(root: Path) -> list[str]:
@@ -92,6 +90,17 @@ def check_parseable(root: Path) -> list[str]:
     return errors
 
 
+def apply_mode(root: Path) -> None:
+    # O CLI do Jenkins (scripts/platform.sh) so existe para tenants.
+    if MODE != 'tenant':
+        cli = root / 'scripts' / 'platform.sh'
+        cli.unlink(missing_ok=True)
+        if cli.parent.is_dir() and not any(cli.parent.iterdir()):
+            cli.parent.rmdir()
+    else:
+        (root / 'scripts' / 'platform.sh').chmod(0o755)
+
+
 def check_identity(root: Path) -> list[str]:
     compose = (root / 'docker-compose.yml').read_text(encoding='utf-8')
     slug = '{{ cookiecutter.project_slug }}'
@@ -102,7 +111,9 @@ def check_identity(root: Path) -> list[str]:
 
 def main() -> int:
     root = Path.cwd()
-    errors = check_expected(root)
+    apply_mode(root)
+    expected = EXPECTED_FILES + (['scripts/platform.sh'] if MODE == 'tenant' else [])
+    errors = [f'arquivo esperado ausente: {name}' for name in expected if not (root / name).is_file()]
     if not errors:
         errors = check_rendered(root) + check_parseable(root) + check_identity(root)
     for error in errors:

@@ -1,3 +1,21 @@
+{%- if cookiecutter.platform_mode == 'tenant' -%}
+# Só para desenvolvimento local (make compose-up). Em produção a plataforma gera o
+# próprio compose (sem portas, atrás do Traefik, com limites) a partir da imagem que o
+# Jenkins publicou no registry do tenant.
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: runtime
+    image: {{ cookiecutter.project_slug }}:local
+    container_name: {{ cookiecutter.project_slug }}
+    ports:
+      - '127.0.0.1:{{ cookiecutter.app_port }}:{{ cookiecutter.app_port }}'
+    env_file:
+      - path: .env
+        required: false
+{%- else -%}
 services:
   app:
     image: ${APP_IMAGE:-{{ cookiecutter.registry }}/{{ cookiecutter.registry_namespace }}/{{ cookiecutter.project_slug }}:latest}
@@ -39,3 +57,4 @@ networks:
   proxy:
     name: ${PROXY_NETWORK:-{{ cookiecutter.proxy_network }}}
     external: true
+{%- endif %}

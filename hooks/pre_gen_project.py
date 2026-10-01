@@ -12,7 +12,13 @@ HEALTH_PATH_RE = re.compile(r'^/[A-Za-z0-9._~/-]*$')
 BRANCH_RE = re.compile(r'^[A-Za-z0-9._/-]+$')
 PYTHON_RE = re.compile(r'^3\.[0-9]+$')
 
+TENANT_RE = re.compile(r'^[a-z][a-z0-9]{1,9}$')
+TENANT_SLUG_RE = re.compile(r'^[a-z][a-z0-9-]{1,30}$')
+
 values = {
+    'platform_mode': r"""{{ cookiecutter.platform_mode }}""",
+    'tenant': r"""{{ cookiecutter.tenant }}""",
+    'jenkins_url': r"""{{ cookiecutter.jenkins_url }}""",
     'project_name': r"""{{ cookiecutter.project_name }}""",
     'project_slug': r"""{{ cookiecutter.project_slug }}""",
     'domain': r"""{{ cookiecutter.domain }}""",
@@ -82,6 +88,23 @@ def validate(v: dict[str, str]) -> list[str]:
 
     if not re.match(r'^[A-Za-z0-9][A-Za-z0-9_.-]*$', v['proxy_network']):
         errors.append(f'proxy_network invalida: {v["proxy_network"]!r}')
+
+    if not re.match(r'^https?://[a-z0-9.-]+(:[0-9]+)?/?$', v['jenkins_url']):
+        errors.append(f'jenkins_url invalida: {v["jenkins_url"]!r} (ex.: https://jenkins.example.com)')
+
+    mode = v['platform_mode']
+    if mode not in ('platform', 'tenant'):
+        errors.append('platform_mode deve ser platform ou tenant')
+    elif mode == 'tenant':
+        if not TENANT_RE.match(v['tenant']):
+            errors.append(
+                f'tenant invalido: {v["tenant"]!r} (o nome recebido do admin: 2-10 minusculas/digitos)'
+            )
+        # Host publico = <slug>-<tenant>.<dominio> (job de deploy da plataforma).
+        if not TENANT_SLUG_RE.match(v['project_slug']):
+            errors.append(f'project_slug invalido no modo tenant: {v["project_slug"]!r} (ate 31 caracteres)')
+    elif v['tenant']:
+        errors.append('tenant so faz sentido com platform_mode=tenant')
 
     return errors
 

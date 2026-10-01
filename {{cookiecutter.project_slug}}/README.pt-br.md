@@ -6,7 +6,12 @@
 
 ## Visão geral
 
+{% if cookiecutter.platform_mode == 'tenant' -%}
+- URL pública (depois do deploy aprovado): `https://{{ cookiecutter.project_slug }}-{{ cookiecutter.tenant }}.{{ cookiecutter.domain }}`
+- Jenkins: `{{ cookiecutter.jenkins_url }}/job/tenants/job/{{ cookiecutter.tenant }}/`
+{%- else -%}
 - URL pública: `https://{{ cookiecutter.subdomain }}.{{ cookiecutter.domain }}`
+{%- endif %}
 - Healthcheck: `GET {{ cookiecutter.health_path }}` → `{"status": "ok", "version": "<APP_VERSION>"}`
 - Imagem: `{{ cookiecutter.registry }}/{{ cookiecutter.registry_namespace }}/{{ cookiecutter.project_slug }}`
 - Repositório: `https://github.com/{{ cookiecutter.github_org }}/{{ cookiecutter.project_slug }}`
@@ -62,16 +67,39 @@ Variáveis só do compose (todas opcionais, `docker compose config -q` funciona 
 
 ## Deploy (Jenkins + Traefik)
 
-Toda branch e pull request roda o CI no Jenkins: `docker compose config -q`, `docker build --check` e `docker build --target test`.
+O `Jenkinsfile` só chama o pipeline padrão da plataforma (`appPipeline`, Shared Library `platform`). Toda branch e PR roda: validação do contrato, `docker build --check`, `docker build --target test` (ruff, mypy, pytest com cobertura mínima de 90%), `pip-audit` do `config/requirements.lock` e Trivy (CRITICAL/HIGH) na imagem de runtime.
+
+{% if cookiecutter.platform_mode == 'tenant' -%}
+Este projeto é de um **tenant** (`{{ cookiecutter.tenant }}`): os builds rodam num agente isolado do tenant, sem acesso ao servidor. Na `{{ cookiecutter.deploy_branch }}`, depois do CI, o pipeline faz o build `--target runtime`, roda um smoke test e publica a imagem no registry do tenant com a tag do commit.
+
+Para ter o link público:
+
+```bash
+make jenkins-login     # uma vez: usuário e senha recebidos do admin -> API token local
+git push               # a {{ cookiecutter.deploy_branch }} publica a imagem (scan a cada 5 min ou: make jenkins-build)
+make jenkins-status    # resultado do último build da branch atual
+make deploy-request    # pede o deploy da última imagem (ou TAG=<sha>); o admin aprova no Jenkins
+make logs              # logs do app publicado
+make undeploy          # tira o app do ar
+```
+
+Depois da aprovação, o app fica em `https://{{ cookiecutter.project_slug }}-{{ cookiecutter.tenant }}.{{ cookiecutter.domain }}`, com HTTPS do Let's Encrypt. Regras do ambiente: a imagem precisa ter `HEALTHCHECK`, rodar com usuário sem privilégio (`USER` no Dockerfile) e passar no Trivy; o container roda sem capabilities e com limites de CPU e memória; variáveis de runtime (segredos) são combinadas com o admin.
+
+O `docker-compose.yml` deste repo é só para rodar local (`make compose-up`, porta {{ cookiecutter.app_port }} em 127.0.0.1).
+{%- else -%}
 Na `{{ cookiecutter.deploy_branch }}` o pipeline também:
 
 1. faz o build `--target runtime` com `APP_VERSION=<sha curto>` (tags `<sha>` e `latest`);
 2. roda um smoke test da imagem e espera `health=healthy`;
 3. faz push para o `{{ cookiecutter.registry }}`;
 4. roda `docker compose up -d --wait` (a imagem anterior fica guardada para rollback);
-5. chama `https://{{ cookiecutter.subdomain }}.{{ cookiecutter.domain }}{{ cookiecutter.health_path }}` pelo Traefik e faz rollback se não vier HTTP 200{% if cookiecutter.health_expects_version == 'yes' %} com a versão nova{% endif %}.
+5. chama `https://{{ cookiecutter.subdomain }}.{{ cookiecutter.domain }}{{ cookiecutter.health_path }}` pelo Traefik e faz rollback se não vier HTTP 200{% if cookiecutter.health_expects_version == 'yes' %} com a versão nova{% endif %};
+6. gera o release com o semantic-release (versão, CHANGELOG e tag).
+
+A `{{ cookiecutter.deploy_branch }}` também é reconstruída toda segunda para pegar patches de segurança. Dependências: Renovate (job `platform/renovate` no Jenkins, preset do devops-platform), com auto-merge de patch/minor depois que o Jenkins aprova o PR.
 
 O container não publica portas. O Traefik chega nele pela rede `{{ cookiecutter.proxy_network }}` usando as labels do `docker-compose.yml` (router `{{ cookiecutter.project_slug }}`, entrypoint `websecure`, cert resolver `letsencrypt`, porta `{{ cookiecutter.app_port }}`).
+{%- endif %}
 
 ## Healthcheck
 
