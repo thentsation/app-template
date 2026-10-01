@@ -7,17 +7,41 @@
 {% raw %}
 // Fora do bloco environment nada é processado pelo cookiecutter (o docker inspect usa {{ }}).
 
-// Volta o serviço para a imagem guardada antes do deploy. Não lança exceção:
-// quem chama decide o resultado do build.
+// Envia as tags (separadas por espaço) de IMAGE_REPO para o OCIR com um DOCKER_CONFIG
+// temporário, removido no fim mesmo em caso de erro.
+def pushTags(String tags) {
+    withEnv(["PUSH_TAGS=${tags}"]) {
+        withCredentials([usernamePassword(credentialsId: 'ocir-credentials',
+                                          usernameVariable: 'OCIR_USER',
+                                          passwordVariable: 'OCIR_PASSWORD')]) {
+            sh label: "docker push ${tags}", script: '''
+                set -eu
+                export DOCKER_CONFIG="$DOCKER_CONFIG_DIR"
+                rm -rf "$DOCKER_CONFIG"
+                mkdir -m 700 "$DOCKER_CONFIG"
+                trap 'docker logout "$REGISTRY_HOST" >/dev/null 2>&1 || true; rm -rf "$DOCKER_CONFIG"' EXIT
+                printf '%s' "$OCIR_PASSWORD" | docker login "$REGISTRY_HOST" -u "$OCIR_USER" --password-stdin
+                for tag in $PUSH_TAGS; do
+                    docker push "$IMAGE_REPO:$tag"
+                done
+            '''
+        }
+    }
+}
+
+// Volta o serviço para a imagem guardada antes do deploy e faz a :latest (local e no
+// OCIR) apontar de novo para ela, para que um compose up sem APP_IMAGE não traga o
+// build rejeitado de volta. Não lança exceção: quem chama decide o resultado do build.
 def rollbackApp() {
     if (!env.PREVIOUS_IMAGE) {
-        echo 'Rollback: não havia container anterior, nada a restaurar.'
+        echo 'Rollback: não havia container anterior, nada a restaurar. A :latest continua no build rejeitado.'
         return
     }
     try {
         sh label: 'Rollback', script: '''
             set -eu
             echo "Rollback de $APP_NAME para $PREVIOUS_IMAGE"
+            docker tag "$PREVIOUS_IMAGE" "$IMAGE_REPO:latest"
             export APP_IMAGE="$PREVIOUS_IMAGE"
             export PROXY_NETWORK="$APP_PROXY_NETWORK"
             docker compose -p "$APP_NAME" up -d --wait --wait-timeout 180 --remove-orphans
@@ -25,6 +49,13 @@ def rollbackApp() {
         echo "Rollback concluído: ${env.APP_NAME} voltou para ${env.PREVIOUS_IMAGE}."
     } catch (err) {
         echo "Rollback FALHOU, verifique o serviço manualmente: ${err}"
+    }
+    if (env.PUSH_ENABLED != 'false') {
+        try {
+            pushTags('latest')
+        } catch (err) {
+            echo "AVISO: :latest no OCIR continua no build rejeitado (push falhou): ${err}"
+        }
     }
 }
 
@@ -67,7 +98,7 @@ pipeline {
                                        script: 'git rev-parse --short=7 HEAD').trim()
                     // Identificador dos recursos temporários deste build (imagens, container, rede).
                     def ref = "${env.BRANCH_NAME ?: 'local'}-${env.BUILD_NUMBER}"
-                    env.CI_ID = "${env.APP_NAME}-ci-${ref}".toLowerCase().replaceAll('[^a-z0-9_.-]', '-')
+                    env.CI_ID = "${env.APP_NAME}-ci-${ref}".toLowerCase().replaceAll('[^a-z0-9]+', '-').replaceAll('^-+|-+$', '')
                     env.DOCKER_CONFIG_DIR = "${env.WORKSPACE}/.ci-docker-config"
                     echo "Imagem: ${env.IMAGE_REPO}:${env.IMAGE_TAG} · branch ${env.BRANCH_NAME} · deploy em ${env.DEPLOY_BRANCH}"
                 }
@@ -194,19 +225,8 @@ pipeline {
                 stage('Push') {
                     when { expression { env.PUSH_ENABLED != 'false' } }
                     steps {
-                        withCredentials([usernamePassword(credentialsId: 'ocir-credentials',
-                                                          usernameVariable: 'OCIR_USER',
-                                                          passwordVariable: 'OCIR_PASSWORD')]) {
-                            sh label: 'docker push', script: '''
-                                set -eu
-                                export DOCKER_CONFIG="$DOCKER_CONFIG_DIR"
-                                rm -rf "$DOCKER_CONFIG"
-                                mkdir -m 700 "$DOCKER_CONFIG"
-                                trap 'docker logout "$REGISTRY_HOST" >/dev/null 2>&1 || true; rm -rf "$DOCKER_CONFIG"' EXIT
-                                printf '%s' "$OCIR_PASSWORD" | docker login "$REGISTRY_HOST" -u "$OCIR_USER" --password-stdin
-                                docker push "$IMAGE_REPO:$IMAGE_TAG"
-                                docker push "$IMAGE_REPO:latest"
-                            '''
+                        script {
+                            pushTags("${env.IMAGE_TAG} latest")
                         }
                     }
                 }
@@ -231,8 +251,9 @@ pipeline {
                                     docker compose -p "$APP_NAME" up -d --wait --wait-timeout 180 --remove-orphans
                                 '''
                             } catch (err) {
+                                echo "Deploy falhou: ${err}"
                                 rollbackApp()
-                                error("Deploy falhou: ${err}")
+                                throw err
                             }
                         }
                     }
@@ -251,7 +272,12 @@ pipeline {
                                     if [ "${TLS_VERIFY:-true}" = false ]; then
                                         set -- -k
                                     fi
-                                    deadline=$(( $(date +%s) + 120 ))
+                                    # 1º deploy: dá tempo para a emissão do certificado (HTTP-01)
+                                    limit=${VALIDATE_TIMEOUT:-120}
+                                    if [ -z "${PREVIOUS_IMAGE:-}" ]; then
+                                        limit=${VALIDATE_TIMEOUT_FIRST_DEPLOY:-300}
+                                    fi
+                                    deadline=$(( $(date +%s) + limit ))
                                     while :; do
                                         code=$(curl -sS "$@" -o "$body" -w '%{http_code}' --max-time 10 --connect-to "$APP_HOST:443:$APP_TRAEFIK_ENDPOINT" "$url" || true)
                                         if [ "$code" = 200 ]; then
@@ -265,7 +291,7 @@ pipeline {
                                             echo "Aguardando $url (HTTP $code)"
                                         fi
                                         if [ "$(date +%s)" -ge "$deadline" ]; then
-                                            echo "ERRO: $url não respondeu como esperado em 120 s." >&2
+                                            echo "ERRO: $url não respondeu como esperado em $limit s." >&2
                                             rm -f "$body"
                                             exit 1
                                         fi
@@ -273,10 +299,21 @@ pipeline {
                                     done
                                 '''
                             } catch (err) {
+                                echo "Validação via Traefik falhou: ${err}"
                                 rollbackApp()
-                                error("Validação via Traefik falhou: ${err}")
+                                throw err
                             }
                         }
+                        sh label: 'Remove tags locais antigas', script: '''
+                            set -eu
+                            # Fica só a versão atual, a :latest e a :previous (rollback).
+                            docker image ls "$IMAGE_REPO" --format '{{.Tag}}' | while read -r tag; do
+                                case "$tag" in
+                                    "$IMAGE_TAG"|latest|previous|"<none>") ;;
+                                    *) docker image rm "$IMAGE_REPO:$tag" >/dev/null 2>&1 || echo "AVISO: não removi $IMAGE_REPO:$tag" ;;
+                                esac
+                            done
+                        '''
                     }
                 }
             }
