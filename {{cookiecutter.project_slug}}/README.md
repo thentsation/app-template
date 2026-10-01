@@ -114,7 +114,7 @@ The container does not publish ports. Traefik reaches it through the `{{ cookiec
 ├── config/
 │   ├── requirements.txt       # runtime dependencies (exact pins)
 │   ├── requirements-dev.txt   # ruff, mypy, pytest...
-│   └── requirements.lock      # uv pip compile config/requirements.txt --output-file config/requirements.lock --universal
+│   └── requirements.lock      # uv pip compile config/requirements.txt --output-file=config/requirements.lock --universal
 ├── docker/Dockerfile          # stages deps, test and runtime
 ├── src/
 │   ├── config.py              # settings (pydantic-settings) and HEALTH_PATH

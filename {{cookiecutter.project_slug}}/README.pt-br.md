@@ -114,7 +114,7 @@ O container não publica portas. O Traefik chega nele pela rede `{{ cookiecutter
 ├── config/
 │   ├── requirements.txt       # dependências de runtime (pin exato)
 │   ├── requirements-dev.txt   # ruff, mypy, pytest...
-│   └── requirements.lock      # uv pip compile config/requirements.txt --output-file config/requirements.lock --universal
+│   └── requirements.lock      # uv pip compile config/requirements.txt --output-file=config/requirements.lock --universal
 ├── docker/Dockerfile          # stages deps, test e runtime
 ├── src/
 │   ├── config.py              # configurações (pydantic-settings) e HEALTH_PATH
