@@ -51,7 +51,7 @@ O app aprovado fica em `https://<projeto>-<tenant>.137-131-175-7.sslip.io`. Regr
 cookiecutter https://github.com/thentsation/app-template.git project_name="Minha API"
 ```
 
-O repo precisa estar na organização (a organization folder do Jenkins descobre os repos com `Jenkinsfile`) e ter o webhook da organização. O Renovate usa o preset `local>thentsation/devops-platform:renovate/default`.
+O repo precisa estar na organização (a organization folder do Jenkins descobre os repos com `Jenkinsfile`) e ter o webhook da organização. O Renovate usa o preset `local>thentsation/devops-platform//renovate/default`.
 
 ## Opções
 

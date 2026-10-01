@@ -369,7 +369,7 @@ grep -q "^@Library('platform') _$" "${jf}" || fail 'Jenkinsfile sem @Library pla
 grep -q "name: 'tpl-default-${SUFFIX}'," "${jf}" || fail 'Jenkinsfile sem name'
 grep -q "host: 'tpl-default-${SUFFIX}.${DEFAULT_DOMAIN}'," "${jf}" || fail 'Jenkinsfile sem host'
 grep -q 'tenant:' "${jf}" && fail 'Jenkinsfile do modo platform com tenant'
-python3 -c "import json,sys; d=json.load(open(sys.argv[1])); assert d['extends']==['local>thentsation/devops-platform:renovate/default'], d" \
+python3 -c "import json,sys; d=json.load(open(sys.argv[1])); assert d['extends']==['local>thentsation/devops-platform//renovate/default'], d" \
   "${WORKDIR}/tpl-default-${SUFFIX}/renovate.json" || fail 'renovate.json do modo platform inesperado'
 [[ ! -e "${WORKDIR}/tpl-default-${SUFFIX}/scripts" ]] || fail 'modo platform gerou scripts/platform.sh'
 [[ ! -e "${WORKDIR}/tpl-default-${SUFFIX}/.github" ]] || fail 'template ainda gera .github/'

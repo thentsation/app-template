@@ -6,6 +6,6 @@
   "pip-compile": {"managerFilePatterns": ["/(^|/)config/requirements\\.lock$/"]},
   "pip_requirements": {"managerFilePatterns": ["/(^|/)config/requirements(-dev)?\\.txt$/"]}
 {%- else %}
-  "extends": ["local>{{ cookiecutter.github_org }}/devops-platform:renovate/default"]
+  "extends": ["local>{{ cookiecutter.github_org }}/devops-platform//renovate/default"]
 {%- endif %}
 }
