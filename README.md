@@ -44,6 +44,32 @@ O app aprovado fica em `https://<projeto>-<tenant>.137-131-175-7.sslip.io`. Regr
 - os builds rodam num Docker próprio do tenant, sem acesso ao servidor nem à rede interna;
 - segredos de runtime do app são combinados com o admin (ficam num `.env` no servidor, fora do repo).
 
+### Repo que já existe (modo tenant)
+
+Para um projeto que já tem repo, não precisa do cookiecutter. Na raiz do repo:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/thentsation/app-template/main/adopt.sh \
+  | bash -s -- --tenant <seu-tenant> [--app nome] [--port 8000] [--health /health] [--branch main]
+```
+
+O script cria o `Jenkinsfile` e o `scripts/platform.sh`, acrescenta os alvos `make` ao Makefile, move o `Dockerfile` da raiz para `docker/Dockerfile` e nomeia o último estágio como `runtime`. Ele confere `HEALTHCHECK` e `USER` e avisa o que falta (isso você ajusta à mão). Não faz commit: revise com `git diff`, faça commit e push e configure o webhook.
+
+Exemplo de `docker/Dockerfile` mínimo (qualquer linguagem; o que importa é o estágio `runtime`, o `HEALTHCHECK` e o `USER`):
+
+```dockerfile
+FROM python:3.12-slim AS runtime
+WORKDIR /app
+COPY . .
+RUN pip install --no-cache-dir -r requirements.txt && useradd -m app
+USER app
+EXPOSE 8000
+HEALTHCHECK CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4)"
+CMD ["python", "main.py"]
+```
+
+O container não tem disco persistente (banco de dados precisa ser externo) e roda sem privilégios.
+
 ### Modo platform (repos da organização)
 
 ```bash
