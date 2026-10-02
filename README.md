@@ -18,20 +18,19 @@ O template tem dois modos (`platform_mode`):
 
 ### Modo tenant (projeto de terceiro)
 
-Você recebe do admin: o nome do tenant, um usuário e uma senha do Jenkins. Então:
+Você recebe do admin: o nome do tenant, um usuário e uma senha do Jenkins e a **URL de webhook** do seu tenant. Então:
 
 ```bash
-cookiecutter https://github.com/thentsation/app-template.git platform_mode=tenant tenant=<seu-tenant>
-cd <projeto>
+cookiecutter https://github.com/thentsation/app-template.git platform_mode=tenant tenant=<seu-tenant> project_name=<nome-do-repo>
+cd <nome-do-repo>
 git init -b main && git add -A && git commit -m "feat: projeto inicial"
-git remote add origin <url do seu repo> && git push -u origin main
+git remote add origin <url https do seu repo> && git push -u origin main
 ```
 
-Mande a URL do repo para o admin (ele cadastra o repo no seu tenant; repo privado precisa de um token de leitura). Depois:
+No seu repo (GitHub, GitLab, Gitea...), crie um **webhook de push** com a URL recebida do admin e content type `application/json`. A partir daí cada push cadastra o repo no Jenkins (na primeira vez) e roda o pipeline na hora; não precisa pedir nada ao admin. Repo privado: combine com o admin um token de leitura.
 
 ```bash
 make jenkins-login     # uma vez: gera um API token do Jenkins (~/.config/devops-platform/)
-make jenkins-build     # pede um scan (o Jenkins também verifica o repo a cada 5 min)
 make jenkins-status    # resultado do último build da branch atual
 make deploy-request    # pede o deploy público da última imagem da main; o admin aprova
 make logs              # logs do app publicado
