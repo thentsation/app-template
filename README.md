@@ -53,6 +53,8 @@ curl -fsSL https://raw.githubusercontent.com/thentsation/app-template/main/adopt
   | bash -s -- --tenant <seu-tenant> [--app nome] [--port 8000] [--health /health] [--branch main]
 ```
 
+Ambiente de teste: com `--run job` (ingestão, batch, script) ou `--run service` (API, web), cada push na branch roda a imagem **uma vez** no Docker isolado do seu tenant e derruba: o job passa se terminar com código 0; o serviço passa se ficar healthy. Os logs ficam no build do Jenkins e nada fica no ar (`--timeout` em minutos, padrão 15). O deploy permanente (`make deploy-request`) continua opcional.
+
 O script cria o `Jenkinsfile` e o `scripts/platform.sh`, acrescenta os alvos `make` ao Makefile, move o `Dockerfile` da raiz para `docker/Dockerfile` e nomeia o último estágio como `runtime`. Ele confere `HEALTHCHECK` e `USER` e avisa o que falta (isso você ajusta à mão). Não faz commit: revise com `git diff`, faça commit e push e configure o webhook.
 
 Exemplo de `docker/Dockerfile` mínimo (qualquer linguagem; o que importa é o estágio `runtime`, o `HEALTHCHECK` e o `USER`):

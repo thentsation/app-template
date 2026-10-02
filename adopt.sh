@@ -12,6 +12,10 @@
 #   --health CAMINHO  endpoint de saúde que responde 200 (padrão: /health)
 #   --branch NOME     branch que publica a imagem (padrão: main)
 #   --jenkins URL     URL do Jenkins (padrão: https://jenkins.137-131-175-7.sslip.io)
+#   --run MODO        execução de teste a cada push na branch: roda a imagem uma vez e
+#                     derruba. job = ingestão/batch/script (passa com exit 0);
+#                     service = API/web (sobe, espera healthy, derruba)
+#   --timeout MIN     limite da execução de teste (padrão: 15)
 #   --force           sobrescreve Jenkinsfile e scripts/platform.sh existentes
 #
 # O que faz:
@@ -31,6 +35,8 @@ HEALTH=/health
 BRANCH=main
 JENKINS=https://jenkins.137-131-175-7.sslip.io
 FORCE=0
+RUN=""
+TIMEOUT=15
 
 die() { printf 'erro: %s\n' "$*" >&2; exit 1; }
 info() { printf '  - %s\n' "$*"; }
@@ -45,6 +51,8 @@ while [[ $# -gt 0 ]]; do
         --health) HEALTH="${2:?}"; shift ;;
         --branch) BRANCH="${2:?}"; shift ;;
         --jenkins) JENKINS="${2:?}"; shift ;;
+        --run) RUN="${2:?}"; shift ;;
+        --timeout) TIMEOUT="${2:?}"; shift ;;
         --force) FORCE=1 ;;
         -h | --help) sed -n '2,24p' "${BASH_SOURCE[0]:-/dev/null}" 2>/dev/null | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) die "opção desconhecida: $1" ;;
@@ -63,6 +71,8 @@ JENKINS="${JENKINS%/}"
 [[ "$HEALTH" =~ ^/[A-Za-z0-9/_.-]*$ ]] || die "--health inválido: $HEALTH"
 git check-ref-format --branch "$BRANCH" >/dev/null 2>&1 || die "--branch inválida: $BRANCH"
 [[ "$JENKINS" =~ ^https?://[a-z0-9.-]+(:[0-9]+)?$ ]] || die "--jenkins inválida: $JENKINS"
+[[ -z "$RUN" || "$RUN" == job || "$RUN" == service ]] || die "--run deve ser job ou service"
+[[ "$TIMEOUT" =~ ^[0-9]{1,3}$ ]] || die "--timeout inválido: $TIMEOUT"
 
 printf 'Preparando %s (tenant %s, app %s)\n' "$PWD" "$TENANT" "$APP"
 
@@ -70,6 +80,8 @@ printf 'Preparando %s (tenant %s, app %s)\n' "$PWD" "$TENANT" "$APP"
 if [[ -e Jenkinsfile && $FORCE == 0 ]]; then
     warn "Jenkinsfile já existe: mantido (use --force para trocar pelo da plataforma)"
 else
+    run_line=""
+    [[ -n "$RUN" ]] && run_line="    run: [mode: '$RUN', timeout: $TIMEOUT],"
     cat >Jenkinsfile <<EOF
 // Pipeline da plataforma (Shared Library "platform", repo devops-platform/jenkins-lib).
 // Modo tenant: build e testes no agente do tenant ($TENANT); a branch $BRANCH publica a
@@ -80,8 +92,10 @@ appPipeline(
     name: '$APP',
     tenant: '$TENANT',
     deployBranch: '$BRANCH',
+$run_line
 )
 EOF
+    sed -i '/^$/{N;/^\n)$/s/^\n//}' Jenkinsfile
     info "Jenkinsfile criado"
 fi
 
@@ -158,7 +172,7 @@ if [[ -f docker/Dockerfile ]]; then
             warn "o último FROM do docker/Dockerfile já tem nome: renomeie-o para 'runtime' (é a imagem que vai para o ar)"
         fi
     fi
-    grep -qiE '^[[:space:]]*HEALTHCHECK[[:space:]]+(--[a-z-]+=[^ ]+[[:space:]]+)*CMD' "$df" \
+    [[ "$RUN" == job ]] || grep -qiE '^[[:space:]]*HEALTHCHECK[[:space:]]+(--[a-z-]+=[^ ]+[[:space:]]+)*CMD' "$df" \
         || warn "falta HEALTHCHECK no docker/Dockerfile (ex.: chamar http://127.0.0.1:$PORT$HEALTH e falhar se não vier 200)"
     user="$(grep -iE '^[[:space:]]*USER[[:space:]]' "$df" | tail -1 | awk '{print $2}' || true)"
     case "$user" in
