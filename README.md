@@ -1,5 +1,7 @@
 # app-template
 
+> **Vai hospedar um projeto como tenant?** Siga o [guia do tenant](docs/GUIA-TENANT.md): o que pedir ao admin, como preparar o repo, webhook, teste e deploy.
+
 Template [cookiecutter](https://cookiecutter.readthedocs.io/) de uma API FastAPI pronta para a plataforma de CI/CD (Jenkins + Traefik) do [devops-platform](https://github.com/thentsation/devops-platform): Dockerfile multi-stage com lint, tipagem e testes, healthcheck, Jenkinsfile que chama o pipeline padrão da plataforma e Renovate para as dependências.
 
 ## Gerar um projeto
